@@ -56,6 +56,7 @@ import android.os.Message;
 import android.os.StrictMode;
 import android.os.UserHandle;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.text.Selection;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
@@ -258,6 +259,8 @@ public class Launcher extends Activity
 
     private boolean mPaused = true;
     private boolean mOnResumeNeedsLoad;
+    private boolean mPlanesEnabled;
+    private ObjectAnimator mPlanesAnimator;
 
     private ArrayList<Runnable> mBindOnResumeCallbacks = new ArrayList<>();
     private ArrayList<Runnable> mOnResumeCallbacks = new ArrayList<>();
@@ -350,7 +353,7 @@ public class Launcher extends Activity
 
     private BlurWallpaperProvider mBlurWallpaperProvider;
 
-    private Dialog mCurrentDialog;
+    private LauncherDialog mCurrentDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -389,6 +392,7 @@ public class Launcher extends Activity
 
         setContentView(R.layout.launcher);
 
+        mPlanesEnabled = FeatureFlags.planes(this);
         setupViews();
         mDeviceProfile.layout(this, false /* notifyListeners */);
         mExtractedColors = new ExtractedColors();
@@ -473,21 +477,44 @@ public class Launcher extends Activity
         return mAllAppsController;
     }
 
+    public void activateLightSystemBars(boolean activate, boolean statusBar, boolean navigationBar) {
+        if (statusBar)
+            activateLightStatusBar(activate);
+        if (navigationBar)
+            activateLightNavigationBar(activate);
+    }
+
     /**
      * Sets the status bar to be light or not. Light status bar means dark icons.
      *
      * @param activate if true, make sure the status bar is light, otherwise base on wallpaper.
      */
     public void activateLightStatusBar(boolean activate) {
-        boolean lightStatusBar = activate || (FeatureFlags.lightStatusBar(getApplicationContext())
-                && mExtractedColors.getColor(ExtractedColors.STATUS_BAR_INDEX,
-                ExtractedColors.DEFAULT_DARK) == ExtractedColors.DEFAULT_LIGHT);
         int oldSystemUiFlags = getWindow().getDecorView().getSystemUiVisibility();
         int newSystemUiFlags = oldSystemUiFlags;
-        if (lightStatusBar) {
+        if (activate) {
             newSystemUiFlags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
         } else {
             newSystemUiFlags &= ~(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        }
+        if (newSystemUiFlags != oldSystemUiFlags) {
+            final int systemUiFlags = newSystemUiFlags;
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    getWindow().getDecorView().setSystemUiVisibility(systemUiFlags);
+                }
+            });
+        }
+    }
+
+    public void activateLightNavigationBar(boolean activate) {
+        int oldSystemUiFlags = getWindow().getDecorView().getSystemUiVisibility();
+        int newSystemUiFlags = oldSystemUiFlags;
+        if (activate) {
+            newSystemUiFlags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        } else {
+            newSystemUiFlags &= ~(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         }
         if (newSystemUiFlags != oldSystemUiFlags) {
             final int systemUiFlags = newSystemUiFlags;
@@ -866,6 +893,10 @@ public class Launcher extends Activity
 
         mLauncherTab.getClient().onResume();
 
+        if (mCurrentDialog != null) {
+            mCurrentDialog.onResume();
+        }
+
         if (reloadIcons) {
             reloadIcons = false;
             reloadIcons();
@@ -964,7 +995,7 @@ public class Launcher extends Activity
                 closeFolder();
 
                 // Close any shortcuts containers
-                closeShortcutsContainer();
+                closeFloatingContainer();
 
                 // Stop resizing any widgets
                 mWorkspace.exitWidgetResizeMode();
@@ -1072,6 +1103,11 @@ public class Launcher extends Activity
         mWorkspace = mDragLayer.findViewById(R.id.workspace);
         mQsbContainer = mDragLayer.findViewById(R.id.qsb_container);
         mWorkspace.initParentViews(mDragLayer);
+
+        if (mPlanesEnabled) {
+            Log.d(TAG, "inflating planes");
+            getLayoutInflater().inflate(R.layout.planes, (ViewGroup) mLauncherView, true);
+        }
 
         mLauncherView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -1585,7 +1621,7 @@ public class Launcher extends Activity
             mWorkspace.exitWidgetResizeMode();
 
             closeFolder(alreadyOnHome);
-            closeShortcutsContainer(alreadyOnHome);
+            closeFloatingContainer(alreadyOnHome);
             exitSpringLoadedDragMode();
 
             // If we are already on home, then just animate back to the workspace,
@@ -1640,6 +1676,26 @@ public class Launcher extends Activity
             }
         }
 
+        if (mPlanesEnabled && mPlanesAnimator == null) {
+            int height = findViewById(R.id.launcher).getHeight();
+            final View planes = findViewById(R.id.planes);
+            mPlanesAnimator = ObjectAnimator.ofFloat(planes, "translationY", height, -height);
+            mPlanesAnimator.setDuration(2000);
+            mPlanesAnimator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    planes.setVisibility(View.GONE);
+                    mPlanesAnimator = null;
+                }
+
+                @Override
+                public void onAnimationStart(Animator animation) {
+                    planes.setVisibility(View.VISIBLE);
+                }
+            });
+            mPlanesAnimator.start();
+        }
+
         dismissDialog();
     }
 
@@ -1669,7 +1725,7 @@ public class Launcher extends Activity
         // this state is reflected.
         // TODO: Move folderInfo.isOpened out of the model and make it a UI state.
         closeFolder(false);
-        closeShortcutsContainer(false);
+        closeFloatingContainer(false);
 
         if (mPendingRequestArgs != null) {
             outState.putParcelable(RUNTIME_STATE_PENDING_REQUEST_ARGS, mPendingRequestArgs);
@@ -2177,7 +2233,7 @@ public class Launcher extends Activity
         }
     }
 
-    protected void onLongClickAllAppsHandle() {
+    public void onLongClickAllAppsHandle() {
         if (!isAppsViewVisible()) {
             showAppsView(true, true);
         }
@@ -2378,7 +2434,7 @@ public class Launcher extends Activity
                 StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder().detectAll()
                         .penaltyLog().build());
 
-                if (info.itemType == LauncherSettings.Favorites.ITEM_TYPE_DEEP_SHORTCUT) {
+                if (info instanceof ShortcutInfo && ((ShortcutInfo) info).useDeepShortcutManager) {
                     String id = ((ShortcutInfo) info).getDeepShortcutId();
                     String packageName = intent.getPackage();
                     DeepShortcutManager.getInstance(this).startShortcut(
@@ -2667,23 +2723,14 @@ public class Launcher extends Activity
         getDragLayer().sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED);
     }
 
-    public void closeShortcutsContainer() {
-        closeShortcutsContainer(true);
+    public void closeFloatingContainer() {
+        closeFloatingContainer(true);
     }
 
-    public void closeShortcutsContainer(boolean animate) {
+    public void closeFloatingContainer(boolean animate) {
         AbstractFloatingView topOpenView = AbstractFloatingView.getTopOpenView(this);
-        if (topOpenView instanceof PopupContainerWithArrow) {
+        if (topOpenView != null)
             topOpenView.close(animate);
-        }
-        /*DeepShortcutsContainer deepShortcutsContainer = getOpenShortcutsContainer();
-        if (deepShortcutsContainer != null) {
-            if (animate) {
-                deepShortcutsContainer.animateClose();
-            } else {
-                deepShortcutsContainer.close();
-            }
-        }*/
     }
 
     public View getTopFloatingView() {
@@ -2934,7 +2981,7 @@ public class Launcher extends Activity
         mUserPresent = false;
         updateAutoAdvanceState();
         closeFolder();
-        closeShortcutsContainer();
+        closeFloatingContainer();
 
         // Send an accessibility event to announce the context change
         getWindow().getDecorView()
@@ -3838,7 +3885,7 @@ public class Launcher extends Activity
         return icon;
     }
 
-    public void openDialog(Dialog dialog) {
+    public void openDialog(LauncherDialog dialog) {
         dismissDialog();
         mCurrentDialog = dialog;
         mCurrentDialog.setOnDismissListener(this);
@@ -3906,6 +3953,25 @@ public class Launcher extends Activity
         @Override
         public void run() {
             Launcher.this.bindAllWidgets(Launcher.this.mAllWidgets);
+        }
+    }
+
+    public static class LauncherDialog extends Dialog {
+
+        public LauncherDialog(@NonNull Context context) {
+            super(context);
+        }
+
+        public LauncherDialog(@NonNull Context context, int themeResId) {
+            super(context, themeResId);
+        }
+
+        protected LauncherDialog(@NonNull Context context, boolean cancelable, @Nullable OnCancelListener cancelListener) {
+            super(context, cancelable, cancelListener);
+        }
+
+        public void onResume() {
+
         }
     }
 }

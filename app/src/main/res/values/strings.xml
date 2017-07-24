@@ -337,7 +337,7 @@
     <string name="full_width_width_widgets_pref_title">Full width widgets</string>
     <string name="full_width_widgets_pref_summary">Allow widgets to span over the whole width without padding</string>
     <string name="notification_access_pref_title">Notification badges and preview</string>
-    <string name="notification_access_pref_summary">Allow Lawnchair to access your notification to enable this features</string>
+    <string name="notification_access_pref_summary">Allow Lawnchair to access your notifications to enable this feature</string>
     <string name="ui_pref_title">UI</string>
     <string name="pixel_style_pref_title">Pixel style</string>
     <string name="behavior_pref_title">Behavior</string>
@@ -356,11 +356,12 @@
     <string name="pinch_to_overview_pref_title">Pinch to overview</string>
     <string name="pinch_to_overview_pref_summary">Pinch on the homescreen to open the overview</string>
     <string name="pull_down_notis_pref_title">Pull down to Notifications</string>
-    <string name="pull_down_notis_pref_on">Pulling down on the Homescreen will expand the statusbar.</string>
-    <string name="pull_down_notis_pref_off">When enabled pulling down on the Homescreen expand the statusbar.</string>
+    <string name="pull_down_notis_pref_on">Pulling down on the Homescreen will expand the statusbar</string>
+    <string name="pull_down_notis_pref_off">When enabled pulling down on the Homescreen expand the statusbar</string>
     <string name="light_statusbar_pref_title">Light statusbar</string>
-    <string name="light_statusbar_pref_on">The status bar may show dark icons when using a light wallpaper.</string>
-    <string name="light_statusbar_pref_off">The status bar will always show light icons.</string>
+    <string name="light_statusbar_pref_on">The status bar may show dark icons when using a light wallpaper</string>
+    <string name="light_statusbar_pref_force">The status bar will show dark icons</string>
+    <string name="light_statusbar_pref_off">The status bar will show light icons</string>
     <string name="haptic_feedback_pref_title">Enable vibration</string>
     <string name="keep_scroll_state_pref_title">Save scroll position</string>
     <string name="keep_scroll_state_pref_summary">Saves the scroll position in the drawer</string>
@@ -424,5 +425,21 @@
     <string name="edit_icon_reset">Reset</string>
     <string name="icon_pack_unsupported">Icon pack unsupported</string>
     <string name="icon_pack_permission_denied">Storage permission is required to access icon</string>
+    <string name="show_top_shadow_title">Show top shadow</string>
+    <string name="pref_cat_homescreen">Home screen</string>
+    <string name="pref_cat_miscellaneous">Miscellaneous</string>
+    <string name="pref_cat_hotseat">Dock</string>
+    <string name="pref_cat_theme">Theme</string>
+    <string name="theme_pref_title">Theme</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_black">Black</string>
+    <string name="hide_hotseat_pref_title">Hide Dock</string>
+    <string name="all_icons">All icons</string>
+    <string name="pull_down_action_pref_title">Pull down action</string>
+    <string name="pull_down_do_nothing">Do nothing</string>
+    <string name="pull_down_notis">Show notifications</string>
+    <string name="pull_down_search">Open search</string>
+    <string name="pull_down_apps_search">Apps search</string>
 
 </resources>
