@@ -9,19 +9,15 @@ import android.graphics.drawable.Drawable;
 import android.util.ArrayMap;
 
 import org.xmlpull.v1.XmlPullParser;
-import org.xmlpull.v1.XmlPullParserException;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import ch.deletescape.lawnchair.FastBitmapDrawable;
 import ch.deletescape.lawnchair.R;
-import ch.deletescape.lawnchair.Utilities;
 import ch.deletescape.lawnchair.compat.LauncherActivityInfoCompat;
 import ch.deletescape.lawnchair.pixelify.PixelIconProvider;
 
@@ -45,6 +41,12 @@ public class IconPack {
     private Map<String, IconPackProvider.IconInfo> icons = new ArrayMap<>();
     private String packageName;
     private Context mContext;
+    private Comparator<IconEntry> mIconComparator = new Comparator<IconEntry>() {
+        @Override
+        public int compare(IconEntry t1, IconEntry t2) {
+            return t1.resourceName.compareTo(t2.resourceName);
+        }
+    };
 
     public IconPack(Map<String, IconPackProvider.IconInfo> icons, Context context, String packageName,
                     String iconBack, String iconUpon, String iconMask, float scale, List<String> calendars) {
@@ -142,7 +144,7 @@ public class IconPack {
         IconCategory allIcons = new IconCategory(mContext.getString(R.string.all_icons));
         categoryList.add(allIcons);
         IconCategory category = null;
-        IconEntry entry = null;
+        IconEntry entry;
         try {
             Resources res = getResources();
             XmlPullParser parser = IconPackProvider.getXml(mContext, packageName, "drawable");
@@ -154,17 +156,20 @@ public class IconPack {
                     categoryList.add(category);
                 } else if (TAG_ITEM.equals(parser.getName())) {
                     int resId = resolveResource(res, parser.getAttributeValue(null, ATTR_DRAWABLE));
-                    entry = new IconEntry(this, resId);
-                    allIcons.addEntry(entry);
-                    if (category != null)
-                        category.addEntry(entry);
+                    if (resId != 0) {
+                        entry = new IconEntry(this, resId);
+                        allIcons.addEntry(entry);
+                        if (category != null)
+                            category.addEntry(entry);
+                    }
                 }
             }
+            allIcons.sort(mIconComparator);
             return categoryList;
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return Utilities.emptyList();
+        return Collections.emptyList();
     }
 
     private String resolveString(Resources res, String title) {
@@ -228,19 +233,33 @@ public class IconPack {
         private void addEntry(IconEntry entry) {
             iconList.add(entry);
         }
+
+        public void sort(Comparator<IconEntry> comparator) {
+            Collections.sort(iconList, comparator);
+        }
     }
 
     public static class IconEntry {
 
         private final IconPack iconPack;
-        public final int resId;
+        final int resId;
+        final String resourceName;
 
         private IconEntry(IconPack ip, int id) {
             iconPack = ip;
             resId = id;
+            resourceName = loadResourceName();
         }
 
-        public Drawable loadDrawable() {
+        private String loadResourceName() {
+            try {
+                return iconPack.getResources().getResourceEntryName(resId);
+            } catch (Exception e) {
+                return "";
+            }
+        }
+
+        Drawable loadDrawable() {
             return iconPack.getDrawable(resId);
         }
 

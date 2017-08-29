@@ -4,12 +4,15 @@ jdk: oraclejdk8
 branches:
    except:
    - l10n_alpha2
+env:
+  - MAJOR_MINOR=1.1.0
 android:
   components:
     - tools
     - platform-tools
-    - build-tools-26.0.0
+    - build-tools-26.0.1
     - android-26
+    - extra-google-m2repository
 before_install: 
   - chmod a+x ./scripts/deploy-*.sh
   - chmod a+x ./scripts/changelog.sh
@@ -48,7 +51,7 @@ deploy:
   - provider: releases
     skip_cleanup: true
     api_key: $GITHUB_OAUTH_TOKEN
-    file: "Lawnchair-$TRAVIS_BUILD_NUMBER.apk"
+    file: "Lawnchair-$MAJOR_MINOR.$TRAVIS_BUILD_NUMBER.apk"
     on:
       tags: true
   - provider: script

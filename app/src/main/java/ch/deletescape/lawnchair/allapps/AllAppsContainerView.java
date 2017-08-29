@@ -53,6 +53,7 @@ import ch.deletescape.lawnchair.LauncherTransitionable;
 import ch.deletescape.lawnchair.R;
 import ch.deletescape.lawnchair.Utilities;
 import ch.deletescape.lawnchair.Workspace;
+import ch.deletescape.lawnchair.allapps.theme.IAllAppsThemer;
 import ch.deletescape.lawnchair.config.FeatureFlags;
 import ch.deletescape.lawnchair.dragndrop.DragOptions;
 import ch.deletescape.lawnchair.folder.Folder;
@@ -106,6 +107,7 @@ public class AllAppsContainerView extends BaseContainerView implements DragSourc
     private final Point mBoundsCheckLastTouchDownPos = new Point(-1, -1);
 
     private AllAppsBackground mAllAppsBackground;
+    private IAllAppsThemer mTheme;
 
     public AllAppsContainerView(Context context) {
         this(context, null);
@@ -116,7 +118,7 @@ public class AllAppsContainerView extends BaseContainerView implements DragSourc
     }
 
     public AllAppsContainerView(Context context, AttributeSet attrs, int defStyleAttr) {
-        super(context, attrs, defStyleAttr);
+        super(FeatureFlags.INSTANCE.applyDarkTheme(context, FeatureFlags.DARK_ALLAPPS), attrs, defStyleAttr);
         Resources res = context.getResources();
 
         mLauncher = Launcher.getLauncher(context);
@@ -125,11 +127,18 @@ public class AllAppsContainerView extends BaseContainerView implements DragSourc
         mAdapter = new AllAppsGridAdapter(mLauncher, mApps, mLauncher, this);
         mApps.setAdapter(mAdapter);
         mLayoutManager = mAdapter.getLayoutManager();
-        mRecyclerViewBottomPadding = 0;
-        setPadding(0, 0, 0, 0);
+        DeviceProfile grid = mLauncher.getDeviceProfile();
+        if (!grid.isVerticalBarLayout()) {
+            mRecyclerViewBottomPadding = 0;
+            setPadding(0, 0, 0, 0);
+        } else {
+            mRecyclerViewBottomPadding =
+                    res.getDimensionPixelSize(R.dimen.all_apps_list_bottom_padding);
+        }
         mSearchQueryBuilder = new SpannableStringBuilder();
         Selection.setSelection(mSearchQueryBuilder, 0);
-        mUseRoundSearchBar = FeatureFlags.useRoundSearchBar(context);
+        mUseRoundSearchBar = Utilities.getPrefs(context).getUseRoundSearchBar();
+        mTheme = Utilities.getThemer().allAppsTheme(context);
     }
 
     /**
@@ -234,7 +243,7 @@ public class AllAppsContainerView extends BaseContainerView implements DragSourc
      */
     public void reset() {
         // Reset the search bar and base recycler view after transitioning home
-        if (!FeatureFlags.keepScrollState(getContext())) {
+        if (!Utilities.getPrefs(getContext()).getKeepScrollState()) {
             scrollToTop();
         }
         mSearchBarController.reset();
@@ -258,10 +267,14 @@ public class AllAppsContainerView extends BaseContainerView implements DragSourc
 
         mSearchContainer = findViewById(R.id.search_container);
         mSearchInput = findViewById(R.id.search_box_input);
-        int accent = Utilities.getDynamicAccent(getContext());
+        int hintAndCursorColor = mTheme.getSearchBarHintTextColor();
         if (!mUseRoundSearchBar)
-            mSearchInput.setHintTextColor(accent);
-        mSearchInput.setCursorColor(accent);
+            mSearchInput.setHintTextColor(hintAndCursorColor);
+        mSearchInput.setCursorColor(hintAndCursorColor);
+
+        if (mTheme.getSearchTextColor() != 0) {
+            mSearchInput.setTextColor(mTheme.getSearchTextColor());
+        }
 
         // Update the hint to contain the icon.
         // Prefix the original hint with two spaces. The first space gets replaced by the icon
@@ -298,6 +311,7 @@ public class AllAppsContainerView extends BaseContainerView implements DragSourc
         getContentView().setBackground(null);
 
         mAllAppsBackground = (AllAppsBackground) getRevealView();
+        mBaseDrawable = mAllAppsBackground.getBaseDrawable();
     }
 
     @Override
@@ -308,13 +322,15 @@ public class AllAppsContainerView extends BaseContainerView implements DragSourc
         mContentBounds.set(mContainerPaddingLeft, 0, widthPx - mContainerPaddingRight, heightPx);
 
         DeviceProfile grid = mLauncher.getDeviceProfile();
-        if (mNumAppsPerRow != grid.inv.numColumns) {
-            mNumAppsPerRow = grid.inv.numColumns;
+        if (mNumAppsPerRow != grid.inv.numColumnsDrawer) {
+            mNumAppsPerRow = grid.inv.numColumnsDrawer;
 
-            mAppsRecyclerView.setNumAppsPerRow(grid, mNumAppsPerRow);
-            mAdapter.setNumAppsPerRow(mNumAppsPerRow);
-            mApps.setNumAppsPerRow(mNumAppsPerRow, new FullMergeAlgorithm());
-            if (mNumAppsPerRow > 0) {
+            int numAppsPerRow = mTheme.numIconPerRow(mNumAppsPerRow);
+
+            mAppsRecyclerView.setNumAppsPerRow(grid, numAppsPerRow);
+            mAdapter.setNumAppsPerRow(numAppsPerRow);
+            mApps.setNumAppsPerRow(numAppsPerRow, new FullMergeAlgorithm());
+            if (numAppsPerRow > 0) {
                 int rvPadding = mAppsRecyclerView.getPaddingStart(); // Assumes symmetry
                 final int thumbMaxWidth =
                         getResources().getDimensionPixelSize(
@@ -367,40 +383,41 @@ public class AllAppsContainerView extends BaseContainerView implements DragSourc
         mAppsRecyclerView.setClipToPadding(false);
 
         DeviceProfile grid = mLauncher.getDeviceProfile();
-        MarginLayoutParams mlp = (MarginLayoutParams) mAppsRecyclerView.getLayoutParams();
+        if (!grid.isVerticalBarLayout()) {
+            MarginLayoutParams mlp = (MarginLayoutParams) mAppsRecyclerView.getLayoutParams();
 
-        Rect insets = mLauncher.getDragLayer().getInsets();
-        getContentView().setPadding(0, 0, 0, 0);
-        int height = insets.top;
-        if (mUseRoundSearchBar) {
-            height += getResources().getDimensionPixelSize(R.dimen.all_apps_search_bar_round_height);
-            height += getResources().getDimensionPixelSize(R.dimen.all_apps_search_bar_round_margin_bottom);
-        } else {
-            height += grid.inv.searchHeightAddition;
+            Rect insets = mLauncher.getDragLayer().getInsets();
+            getContentView().setPadding(0, 0, 0, 0);
+            int height = insets.top;
+            if (mUseRoundSearchBar) {
+                height += getResources().getDimensionPixelSize(R.dimen.all_apps_search_bar_round_height);
+                height += getResources().getDimensionPixelSize(R.dimen.all_apps_search_bar_round_margin_bottom);
+            } else if (!grid.isVerticalBarLayout()) {
+                height += grid.inv.searchHeightAddition;
+            }
+
+            mlp.topMargin = height;
+            mAppsRecyclerView.setLayoutParams(mlp);
+
+            mSearchContainer.setPadding(
+                    mSearchContainer.getPaddingLeft(),
+                    insets.top + mSearchContainerOffsetTop,
+                    mSearchContainer.getPaddingRight(),
+                    mSearchContainer.getPaddingBottom());
+            lp.height = height;
+
+            View navBarBg = findViewById(R.id.nav_bar_bg);
+            ViewGroup.LayoutParams params = navBarBg.getLayoutParams();
+            params.height = insets.bottom;
+            navBarBg.setLayoutParams(params);
+            navBarBg.setVisibility(View.VISIBLE);
         }
-
         if (mUseRoundSearchBar) {
             View divider = findViewById(R.id.search_bar_divider);
             MarginLayoutParams dividerParams = (MarginLayoutParams) divider.getLayoutParams();
-            dividerParams.topMargin = height - dividerParams.height;
+            dividerParams.topMargin = lp.height - dividerParams.height;
             divider.setLayoutParams(dividerParams);
         }
-
-        mlp.topMargin = height;
-        mAppsRecyclerView.setLayoutParams(mlp);
-
-        mSearchContainer.setPadding(
-                mSearchContainer.getPaddingLeft(),
-                insets.top + mSearchContainerOffsetTop,
-                mSearchContainer.getPaddingRight(),
-                mSearchContainer.getPaddingBottom());
-        lp.height = height;
-
-        View navBarBg = findViewById(R.id.nav_bar_bg);
-        ViewGroup.LayoutParams params = navBarBg.getLayoutParams();
-        params.height = insets.bottom;
-        navBarBg.setLayoutParams(params);
-        navBarBg.setVisibility(View.VISIBLE);
         mSearchContainer.setLayoutParams(lp);
     }
 
@@ -447,6 +464,11 @@ public class AllAppsContainerView extends BaseContainerView implements DragSourc
         // Return if global dragging is not enabled or we are already dragging
         if (!mLauncher.isDraggingEnabled()) return false;
         if (mLauncher.getDragController().isDragging()) return false;
+
+        if (v instanceof AllAppsIconRowView) {
+            ((AllAppsIconRowView) v).beginDrag(this);
+            return false;
+        }
 
         // Start the drag
         DragOptions dragOptions = new DragOptions();
@@ -554,14 +576,12 @@ public class AllAppsContainerView extends BaseContainerView implements DragSourc
                     tmpRect.inset(-grid.allAppsIconSizePx / 2, 0);
                     if (ev.getX() < tmpRect.left || ev.getX() > tmpRect.right) {
                         mBoundsCheckLastTouchDownPos.set(x, y);
-                        return true;
                     }
                 } else {
                     // Check if the touch is outside all apps
                     if (ev.getX() < getPaddingLeft() ||
                             ev.getX() > (getWidth() - getPaddingRight())) {
                         mBoundsCheckLastTouchDownPos.set(x, y);
-                        return true;
                     }
                 }
                 break;
@@ -632,26 +652,20 @@ public class AllAppsContainerView extends BaseContainerView implements DragSourc
     }
 
     @Override
-    protected void updatePaddings() {
-        mContainerPaddingLeft = mContainerPaddingRight = 0;
-        mContainerPaddingTop = mContainerPaddingBottom = 0;
-    }
-
-    @Override
     public void setRevealDrawableColor(int color) {
         mAllAppsBackground.setBackgroundColor(color);
     }
 
     public void setWallpaperTranslation(float translation) {
-        mAllAppsBackground.setWallpaperTranslation(translation);
+        mAllAppsBackground.setWallpaperTranslation(translation + getTop());
     }
 
     public void setBlurOpacity(int opacity) {
         mAllAppsBackground.setBlurOpacity(opacity);
     }
 
-    public void setAppIconTextColor(int color) {
-        mAdapter.setAppIconTextColor(color);
+    public void setAppIconTextStyle(int color, int maxLines) {
+        mAdapter.setAppIconTextStyle(color, maxLines);
         mAdapter.notifyDataSetChanged();
     }
 }

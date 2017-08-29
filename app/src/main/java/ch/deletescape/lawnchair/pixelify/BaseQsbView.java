@@ -7,7 +7,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.util.AttributeSet;
@@ -17,14 +16,17 @@ import android.view.View.OnClickListener;
 import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.FrameLayout;
 
+import ch.deletescape.lawnchair.DeviceProfile;
 import ch.deletescape.lawnchair.Launcher;
 import ch.deletescape.lawnchair.R;
 import ch.deletescape.lawnchair.Utilities;
 import ch.deletescape.lawnchair.compat.LauncherAppsCompat;
 import ch.deletescape.lawnchair.config.FeatureFlags;
+import ch.deletescape.lawnchair.preferences.IPreferenceProvider;
+import ch.deletescape.lawnchair.preferences.PreferenceProvider;
 import ch.deletescape.lawnchair.util.PackageManagerHelper;
 
-public abstract class BaseQsbView extends FrameLayout implements OnClickListener, OnSharedPreferenceChangeListener {
+public abstract class BaseQsbView extends FrameLayout implements OnClickListener, SharedPreferences.OnSharedPreferenceChangeListener {
     private static final String TEXT_ASSIST = "com.google.android.googlequicksearchbox.TEXT_ASSIST";
     private static final String VOICE_ASSIST = Intent.ACTION_VOICE_COMMAND;
     protected View mQsbView;
@@ -32,7 +34,7 @@ public abstract class BaseQsbView extends FrameLayout implements OnClickListener
     protected boolean showMic;
     protected QsbConnector qsbConnector;
     private ObjectAnimator elevationAnimator;
-    private final BroadcastReceiver packageChangedReciever = new PackageChangedReciever(this);
+    private final BroadcastReceiver packageChangedReceiver = new PackageChangedReceiver(this);
     private boolean qsbHidden;
     private int mQsbViewId = 0;
     private boolean bM;
@@ -41,13 +43,13 @@ public abstract class BaseQsbView extends FrameLayout implements OnClickListener
     protected abstract int getQsbView(boolean withMic);
 
     public BaseQsbView(Context context, AttributeSet attributeSet, int i) {
-        super(context, attributeSet, i);
+        super(FeatureFlags.INSTANCE.applyDarkTheme(context, FeatureFlags.DARK_QSB), attributeSet, i);
         mLauncher = Launcher.getLauncher(context);
     }
 
-    public void applyVoiceSearchPreference(SharedPreferences prefs) {
-        showMic = FeatureFlags.showVoiceSearchButton(getContext());
-        boolean useWhiteLogo = FeatureFlags.useWhiteGoogleIcon(getContext());
+    public void applyVoiceSearchPreference() {
+        showMic = Utilities.getPrefs(getContext()).getShowVoiceSearchButton();
+        boolean useWhiteLogo = Utilities.getPrefs(getContext()).getUseWhiteGoogleIcon();
         int qsbView = getQsbView(showMic);
         if (qsbView != mQsbViewId || mUseWhiteLogo != useWhiteLogo) {
             mQsbViewId = qsbView;
@@ -79,13 +81,13 @@ public abstract class BaseQsbView extends FrameLayout implements OnClickListener
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        if (!FeatureFlags.showPixelBar(getContext())) {
+        if (!Utilities.getPrefs(getContext()).getShowPixelBar()) {
             return;
         }
-        SharedPreferences sharedPreferences = Utilities.getPrefs(getContext());
-        applyVoiceSearchPreference(sharedPreferences);
+        IPreferenceProvider sharedPreferences = PreferenceProvider.INSTANCE.getPreferences(getContext());
+        applyVoiceSearchPreference();
         sharedPreferences.registerOnSharedPreferenceChangeListener(this);
-        getContext().registerReceiver(packageChangedReciever, Util.createIntentFilter("android.intent.action.PACKAGE_CHANGED"));
+        getContext().registerReceiver(packageChangedReceiver, Util.createIntentFilter("android.intent.action.PACKAGE_CHANGED"));
         initializeQsbConnector();
         applyVisibility();
     }
@@ -95,7 +97,7 @@ public abstract class BaseQsbView extends FrameLayout implements OnClickListener
         super.onDetachedFromWindow();
         try {
             Utilities.getPrefs(getContext()).unregisterOnSharedPreferenceChangeListener(this);
-            getContext().unregisterReceiver(packageChangedReciever);
+            getContext().unregisterReceiver(packageChangedReceiver);
         } catch (IllegalArgumentException ignored) {
             // Not supposed to happen but we'll ignore it
         }
@@ -105,16 +107,18 @@ public abstract class BaseQsbView extends FrameLayout implements OnClickListener
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String str) {
         if (FeatureFlags.KEY_SHOW_VOICE_SEARCH_BUTTON.equals(str) ||
                 FeatureFlags.KEY_PREF_WHITE_GOOGLE_ICON.equals(str)) {
-            applyVoiceSearchPreference(sharedPreferences);
+            applyVoiceSearchPreference();
             applyVisibility();
         }
     }
 
     private void initializeQsbConnector() {
-        if (qsbConnector == null && !FeatureFlags.useFullWidthSearchbar(getContext()) && FeatureFlags.showGoogleNowTab(mLauncher)) {
+        DeviceProfile deviceProfile = mLauncher.getDeviceProfile();
+        if (qsbConnector == null && !Utilities.getPrefs(getContext()).getUseFullWidthSearchBar()
+                && Utilities.getPrefs(mLauncher).getShowGoogleNowTab() && !deviceProfile.isLandscape && !deviceProfile.isTablet) {
             qsbConnector = (QsbConnector) mLauncher.getLayoutInflater().inflate(R.layout.qsb_connector, this, false);
             addView(qsbConnector, 0);
-        } else if (FeatureFlags.useFullWidthSearchbar(getContext()) || !FeatureFlags.showGoogleNowTab(mLauncher)) {
+        } else if (Utilities.getPrefs(getContext()).getUseFullWidthSearchBar() || !Utilities.getPrefs(mLauncher).getShowGoogleNowTab()) {
             removeView(qsbConnector);
         }
     }
@@ -254,10 +258,10 @@ public abstract class BaseQsbView extends FrameLayout implements OnClickListener
         }
     }
 
-    final class PackageChangedReciever extends BroadcastReceiver {
+    final class PackageChangedReceiver extends BroadcastReceiver {
         final /* synthetic */ BaseQsbView cp;
 
-        PackageChangedReciever(BaseQsbView qsbView) {
+        PackageChangedReceiver(BaseQsbView qsbView) {
             cp = qsbView;
         }
 

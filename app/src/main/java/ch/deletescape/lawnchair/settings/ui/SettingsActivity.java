@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2017 The MoKee Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,20 +19,22 @@ package ch.deletescape.lawnchair.settings.ui;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.Dialog;
 import android.app.Fragment;
 import android.app.FragmentTransaction;
-import android.content.Intent;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Bundle;
+import android.preference.ListPreference;
 import android.preference.Preference;
+import android.preference.PreferenceCategory;
 import android.preference.PreferenceFragment;
 import android.preference.PreferenceScreen;
-import android.provider.Settings;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AppCompatActivity;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
@@ -39,7 +42,11 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ListAdapter;
 import android.widget.ListView;
+import android.widget.Toast;
 
+import java.util.Random;
+
+import ch.deletescape.lawnchair.BuildConfig;
 import ch.deletescape.lawnchair.DumbImportExportTask;
 import ch.deletescape.lawnchair.LauncherAppState;
 import ch.deletescape.lawnchair.LauncherFiles;
@@ -47,18 +54,24 @@ import ch.deletescape.lawnchair.R;
 import ch.deletescape.lawnchair.Utilities;
 import ch.deletescape.lawnchair.blur.BlurWallpaperProvider;
 import ch.deletescape.lawnchair.config.FeatureFlags;
+import ch.deletescape.lawnchair.graphics.IconShapeOverride;
+import ch.deletescape.lawnchair.preferences.IPreferenceProvider;
+import ch.deletescape.lawnchair.preferences.PreferenceFlags;
 
 /**
  * Settings activity for Launcher. Currently implements the following setting: Allow rotation
  */
-public class SettingsActivity extends Activity implements PreferenceFragment.OnPreferenceStartFragmentCallback, SharedPreferences.OnSharedPreferenceChangeListener {
+public class SettingsActivity extends AppCompatActivity implements PreferenceFragment.OnPreferenceStartFragmentCallback, SharedPreferences.OnSharedPreferenceChangeListener {
+
+    private static IPreferenceProvider sharedPrefs;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        FeatureFlags.applyDarkTheme(this);
+        FeatureFlags.INSTANCE.applyDarkTheme(this);
         super.onCreate(savedInstanceState);
 
-        if (FeatureFlags.currentTheme != 2)
-            BlurWallpaperProvider.applyBlurBackground(this);
+        if (FeatureFlags.INSTANCE.getCurrentTheme() != 2)
+            BlurWallpaperProvider.Companion.applyBlurBackground(this);
 
         if (savedInstanceState == null) {
             // Display the fragment as the main content.
@@ -67,7 +80,8 @@ public class SettingsActivity extends Activity implements PreferenceFragment.OnP
                     .commit();
         }
 
-        Utilities.getPrefs(this).registerOnSharedPreferenceChangeListener(this);
+        sharedPrefs = Utilities.getPrefs(this);
+        sharedPrefs.registerOnSharedPreferenceChangeListener(this);
         updateUpButton();
     }
 
@@ -81,7 +95,7 @@ public class SettingsActivity extends Activity implements PreferenceFragment.OnP
             transaction.replace(android.R.id.content, fragment);
             transaction.addToBackStack("PreferenceFragment");
             transaction.commit();
-            getActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             return true;
         }
         return false;
@@ -94,7 +108,7 @@ public class SettingsActivity extends Activity implements PreferenceFragment.OnP
     }
 
     private void updateUpButton() {
-        getActionBar().setDisplayHomeAsUpEnabled(getFragmentManager().getBackStackEntryCount() != 0);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(getFragmentManager().getBackStackEntryCount() != 0);
     }
 
     @Override
@@ -109,22 +123,12 @@ public class SettingsActivity extends Activity implements PreferenceFragment.OnP
     @Override
     public void onSharedPreferenceChanged(SharedPreferences prefs, String key) {
         if (FeatureFlags.KEY_PREF_THEME.equals(key)) {
-            FeatureFlags.loadDarkThemePreference(this);
+            FeatureFlags.INSTANCE.loadThemePreference(this);
             recreate();
         }
     }
 
-    /**
-     * This fragment shows the launcher preferences.
-     */
-    public static class LauncherSettingsFragment extends PreferenceFragment implements AdapterView.OnItemLongClickListener {
-
-        @Override
-        public void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-            getPreferenceManager().setSharedPreferencesName(LauncherFiles.SHARED_PREFERENCES_KEY);
-            addPreferencesFromResource(R.xml.launcher_preferences);
-        }
+    private abstract static class BaseFragment extends PreferenceFragment implements AdapterView.OnItemLongClickListener {
 
         @Override
         public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -133,12 +137,6 @@ public class SettingsActivity extends Activity implements PreferenceFragment.OnP
             ListView listView = view.findViewById(android.R.id.list);
             listView.setOnItemLongClickListener(this);
             return view;
-        }
-
-        @Override
-        public void onResume() {
-            super.onResume();
-            getActivity().setTitle(R.string.settings_button_text);
         }
 
         @Override
@@ -160,7 +158,26 @@ public class SettingsActivity extends Activity implements PreferenceFragment.OnP
         }
     }
 
-    public static class SubSettingsFragment extends PreferenceFragment {
+    /**
+     * This fragment shows the launcher preferences.
+     */
+    public static class LauncherSettingsFragment extends BaseFragment {
+
+        @Override
+        public void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+            getPreferenceManager().setSharedPreferencesName(LauncherFiles.SHARED_PREFERENCES_KEY);
+            addPreferencesFromResource(R.xml.launcher_preferences);
+        }
+
+        @Override
+        public void onResume() {
+            super.onResume();
+            getActivity().setTitle(R.string.settings_button_text);
+        }
+    }
+
+    public static class SubSettingsFragment extends BaseFragment implements Preference.OnPreferenceChangeListener {
 
         private static final String TITLE = "title";
         private static final String CONTENT_RES_ID = "content_res_id";
@@ -170,15 +187,68 @@ public class SettingsActivity extends Activity implements PreferenceFragment.OnP
             super.onCreate(savedInstanceState);
             getPreferenceManager().setSharedPreferencesName(LauncherFiles.SHARED_PREFERENCES_KEY);
             addPreferencesFromResource(getContent());
+            if (getContent() == R.xml.launcher_pixel_style_preferences) {
+                Preference prefWeatherEnabled = findPreference(FeatureFlags.KEY_PREF_WEATHER);
+                prefWeatherEnabled.setOnPreferenceChangeListener(this);
+                Preference prefWeatherProvider = findPreference(PreferenceFlags.KEY_WEATHER_PROVIDER);
+                prefWeatherProvider.setEnabled(BuildConfig.AWARENESS_API_ENABLED);
+                prefWeatherProvider.setOnPreferenceChangeListener(this);
+                updateEnabledState(Utilities.getPrefs(getActivity()).getWeatherProvider());
+                Preference overrideShapePreference = findPreference(PreferenceFlags.KEY_OVERRIDE_ICON_SHAPE);
+                if (IconShapeOverride.Companion.isSupported(getActivity())) {
+                    IconShapeOverride.Companion.handlePreferenceUi((ListPreference) overrideShapePreference);
+                } else {
+                    ((PreferenceCategory) findPreference("prefCat_homeScreen"))
+                            .removePreference(overrideShapePreference);
+                }
+            } else if (getContent() == R.xml.launcher_about_preferences) {
+                findPreference("about_version").setSummary(BuildConfig.VERSION_NAME);
+                if (BuildConfig.TRAVIS && !BuildConfig.TAGGED_BUILD) {
+                    findPreference("about_changelog").setSummary(Utilities.getChangelog());
+                }
+            } else if (getContent() == R.xml.launcher_behavior_preferences) {
+                if (Utilities.ATLEAST_NOUGAT_MR1) {
+                    getPreferenceScreen().removePreference(findPreference(FeatureFlags.KEY_PREF_ENABLE_BACKPORT_SHORTCUTS));
+                }
+            } else if (getContent() == R.xml.launcher_hidden_preferences) {
+                Preference eminemPref = findPreference("random_eminem_quote");
+                String[] eminemQuotes = getResources().getStringArray(R.array.eminem_quotes);
+                int index = new Random().nextInt(eminemQuotes.length);
+                eminemPref.setSummary(eminemQuotes[index]);
+            }
+        }
+
+        private void updateEnabledState(String weatherProvider) {
+            boolean awarenessApiEnabled = weatherProvider.equals(PreferenceFlags.PREF_WEATHER_PROVIDER_AWARENESS);
+            Preference prefWeatherCity = findPreference(PreferenceFlags.KEY_WEATHER_CITY);
+            Preference prefWeatherApiKey = findPreference(PreferenceFlags.KEY_WEATHER_API_KEY);
+            prefWeatherCity.setEnabled(!awarenessApiEnabled);
+            prefWeatherApiKey.setEnabled(!awarenessApiEnabled);
+        }
+
+        @Override
+        public boolean onPreferenceChange(Preference preference, Object newValue) {
+            if (preference.getKey() != null) {
+                switch (preference.getKey()) {
+                    case PreferenceFlags.KEY_WEATHER_PROVIDER:
+                        updateEnabledState((String) newValue);
+                        break;
+                    case FeatureFlags.KEY_PREF_WEATHER:
+                        Context context = getActivity();
+                        if (Utilities.getPrefs(context).getShowWeather() && Utilities.isAwarenessApiEnabled(context)) {
+                            checkPermission(Manifest.permission.ACCESS_FINE_LOCATION);
+                        }
+                        break;
+                }
+                return true;
+            }
+            return false;
         }
 
         @Override
         public boolean onPreferenceTreeClick(PreferenceScreen preferenceScreen, Preference preference) {
             if (preference.getKey() != null) {
                 switch (preference.getKey()) {
-                    case "notification_access":
-                        startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
-                        break;
                     case "kill":
                         LauncherAppState.getInstance().getLauncher().scheduleKill();
                         break;
@@ -205,6 +275,17 @@ public class SettingsActivity extends Activity implements PreferenceFragment.OnP
                             LauncherAppState.getInstance().getLauncher().scheduleKill();
                         }
                         break;
+                    case PreferenceFlags.KEY_WEATHER_PROVIDER:
+                        if (!checkPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
+                            Toast.makeText(getActivity(), R.string.location_permission_warn, Toast.LENGTH_SHORT).show();
+                        }
+                        break;
+                    case "about_translators":
+                        Dialog dialog = new Dialog(getActivity());
+                        dialog.setTitle(R.string.about_translators);
+                        dialog.setContentView(R.layout.dialog_translators);
+                        dialog.show();
+                        break;
                     default:
                         return false;
                 }
@@ -214,13 +295,17 @@ public class SettingsActivity extends Activity implements PreferenceFragment.OnP
         }
 
         private boolean checkStoragePermission() {
+            return checkPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        }
+
+        private boolean checkPermission(String permission) {
             boolean granted = ContextCompat.checkSelfPermission(
                     getActivity(),
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+                    permission) == PackageManager.PERMISSION_GRANTED;
             if (granted) return true;
             ActivityCompat.requestPermissions(
                     getActivity(),
-                    new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    new String[]{permission},
                     0);
             return false;
         }
@@ -243,5 +328,6 @@ public class SettingsActivity extends Activity implements PreferenceFragment.OnP
             fragment.setArguments(b);
             return fragment;
         }
+
     }
 }

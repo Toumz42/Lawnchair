@@ -5,7 +5,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
@@ -17,35 +16,30 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.UserHandle;
+import android.support.annotation.Nullable;
 import android.util.Log;
 
 import org.xmlpull.v1.XmlPullParser;
 
-import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
-import java.util.List;
 
+import ch.deletescape.lawnchair.LauncherModel;
 import ch.deletescape.lawnchair.Utilities;
+import ch.deletescape.lawnchair.compat.LauncherActivityInfoCompat;
+import ch.deletescape.lawnchair.compat.UserManagerCompat;
 import ch.deletescape.lawnchair.iconpack.CustomIconDrawable;
 import ch.deletescape.lawnchair.iconpack.IconPack;
 import ch.deletescape.lawnchair.iconpack.IconPackProvider;
-import ch.deletescape.lawnchair.LauncherAppState;
-import ch.deletescape.lawnchair.LauncherModel;
-import ch.deletescape.lawnchair.compat.LauncherActivityInfoCompat;
-import ch.deletescape.lawnchair.compat.UserManagerCompat;
-import ch.deletescape.lawnchair.config.FeatureFlags;
-import ch.deletescape.lawnchair.shortcuts.DeepShortcutManager;
-import ch.deletescape.lawnchair.util.PackageManagerHelper;
+import ch.deletescape.lawnchair.preferences.IPreferenceProvider;
 
 public class PixelIconProvider {
     private BroadcastReceiver mBroadcastReceiver;
     private PackageManager mPackageManager;
     private IconPack sIconPack;
     private Context mContext;
-    private final SharedPreferences mPrefs;
+    private final IPreferenceProvider mPrefs;
 
     private ArrayList<String> mCalendars;
 
@@ -114,21 +108,31 @@ public class PixelIconProvider {
     }
 
     private IconPack getIconPackForComponent(ComponentName componentName) {
-        String alternateIcon = mPrefs.getString("alternateIcon_" + componentName.flattenToString(), null);
+        String alternateIcon = mPrefs.alternateIcon(componentName.flattenToString());
         if (alternateIcon == null) return sIconPack;
         if (alternateIcon.startsWith("iconPacks")) {
-            String[] parts = alternateIcon.split("/");
-            if (parts.length == 2) {
-                return IconPackProvider.loadAndGetIconPack(mContext, parts[1]);
-            } else {
-                return null;
-            }
+            return getIconPack(alternateIcon);
         }
         return sIconPack;
     }
 
+    @Nullable
+    private IconPack getIconPack(String alternateIcon) {
+        if (alternateIcon.startsWith("iconPacks")) {
+            String[] parts = alternateIcon.split("/");
+            if (parts.length == 2) {
+                return IconPackProvider.loadAndGetIconPack(mContext, parts[1]);
+            }
+        }
+        return null;
+    }
+
     private Drawable getIconForComponent(ComponentName componentName) {
-        String alternateIcon = mPrefs.getString("alternateIcon_" + componentName.flattenToString(), null);
+        String alternateIcon = mPrefs.alternateIcon(componentName.flattenToString());
+        return getAlternateIcon(alternateIcon, null);
+    }
+
+    public Drawable getAlternateIcon(String alternateIcon, LauncherActivityInfoCompat laic) {
         if (alternateIcon == null) return null;
         if (alternateIcon.startsWith("uri")) {
             alternateIcon = alternateIcon.substring(4);
@@ -156,6 +160,10 @@ public class PixelIconProvider {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        } else if (laic != null && alternateIcon.startsWith("iconPacks")) {
+            IconPack iconPack = getIconPack(alternateIcon);
+            if (iconPack == null) return null;
+            return iconPack.getIcon(laic);
         }
         return null;
     }
@@ -166,8 +174,12 @@ public class PixelIconProvider {
             IconPack iconPack = getIconPackForComponent(info.getComponentName());
             drawable = iconPack == null ? null : iconPack.getIcon(info);
         }
+        return getDefaultIcon(info, iconDpi, drawable);
+    }
+
+    public Drawable getDefaultIcon(LauncherActivityInfoCompat info, int iconDpi, Drawable drawable) {
         boolean isRoundPack = isRoundIconPack(sIconPack);
-        if ((drawable == null && FeatureFlags.usePixelIcons(mContext)) ||
+        if ((drawable == null && Utilities.getPrefs(mContext).getUsePixelIcons()) ||
                 (isRoundPack && drawable instanceof CustomIconDrawable)) {
             Drawable roundIcon = getRoundIcon(info.getComponentName().getPackageName(), iconDpi);
             if (roundIcon != null)
@@ -207,7 +219,6 @@ public class PixelIconProvider {
         @Override
         public void onReceive(final Context context, final Intent intent) {
             for (UserHandle userHandle : UserManagerCompat.getInstance(context).getUserProfiles()) {
-                LauncherAppState instance = LauncherAppState.getInstance();
                 for (String calendar : mCalendars) {
                     Utilities.updatePackage(context, userHandle, calendar);
                 }

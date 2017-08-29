@@ -22,7 +22,6 @@ import android.content.Intent;
 import android.content.pm.ShortcutInfo;
 import android.graphics.drawable.Drawable;
 import android.os.UserHandle;
-import android.util.Log;
 
 import ch.deletescape.lawnchair.ItemInfo;
 import ch.deletescape.lawnchair.Utilities;
@@ -76,7 +75,7 @@ public class ShortcutInfoCompat {
         Intent intent;
         if (useNative()) {
             intent = new Intent(Intent.ACTION_MAIN);
-            intent.setComponent(activity);
+            intent.setComponent(mShortcutInfo.getActivity());
         } else {
             intent = launchIntent;
         }
@@ -218,7 +217,7 @@ public class ShortcutInfoCompat {
     }
 
     public boolean useNative() {
-        return Utilities.isNycMR1OrAbove() && mShortcutInfo != null;
+        return Utilities.ATLEAST_NOUGAT_MR1 && mShortcutInfo != null;
     }
 
     public LauncherActivityInfoCompat getActivityInfo(Context context) {

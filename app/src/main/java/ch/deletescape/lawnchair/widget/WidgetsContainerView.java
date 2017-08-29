@@ -48,7 +48,7 @@ public class WidgetsContainerView extends BaseContainerView implements OnLongCli
     }
 
     private static int getTheme() {
-        return FeatureFlags.useDarkTheme ? R.style.WidgetContainerTheme_Dark : R.style.WidgetContainerTheme;
+        return FeatureFlags.INSTANCE.getUseDarkTheme() ? R.style.WidgetContainerTheme_Dark : R.style.WidgetContainerTheme;
     }
 
     public View getTouchDelegateTargetView() {
@@ -84,14 +84,11 @@ public class WidgetsContainerView extends BaseContainerView implements OnLongCli
 
     @Override
     public boolean onLongClick(View view) {
-        if (this.mLauncher.isWidgetsViewVisible()) {
-            return handleLongClick(view);
-        }
-        return false;
+        return mLauncher.isWidgetsViewVisible() && handleLongClick(view);
     }
 
     public boolean handleLongClick(View view) {
-        if (view.isInTouchMode() && !this.mLauncher.getWorkspace().isSwitchingState() && this.mLauncher.isDraggingEnabled()) {
+        if (view.isInTouchMode() && !mLauncher.getWorkspace().isSwitchingState() && mLauncher.isDraggingEnabled()) {
             return beginDragging(view);
         }
         return false;

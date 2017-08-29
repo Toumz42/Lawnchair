@@ -2,6 +2,11 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
     <SwitchPreference
+        android:key="pref_enableBackportShortcuts"
+        android:title="@string/pref_backport_shortcuts"
+        android:summary="@string/shortcut_backport_warning" />
+
+    <SwitchPreference
         android:key="pref_pinchToOverview"
         android:title="@string/pinch_to_overview_pref_title"
         android:summary="@string/pinch_to_overview_pref_summary"
@@ -56,6 +61,12 @@
         android:title="@string/show_hidden_pref_title"
         android:summaryOn="@string/show_hidden_pref_on"
         android:summaryOff="@string/show_hidden_pref_off"
+        android:defaultValue="false"
+        android:persistent="true" />
+
+    <SwitchPreference
+        android:key="pref_lockDesktop"
+        android:title="@string/lock_desktop"
         android:defaultValue="false"
         android:persistent="true" />
 </PreferenceScreen>
