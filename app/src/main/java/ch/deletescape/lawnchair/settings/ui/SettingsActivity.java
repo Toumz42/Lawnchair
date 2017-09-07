@@ -201,13 +201,17 @@ public class SettingsActivity extends AppCompatActivity implements PreferenceFra
                     ((PreferenceCategory) findPreference("prefCat_homeScreen"))
                             .removePreference(overrideShapePreference);
                 }
+                if (Utilities.ATLEAST_NOUGAT) {
+                    ((PreferenceCategory) findPreference("prefCat_homeScreen"))
+                        .removePreference(findPreference(PreferenceFlags.KEY_PREF_PIXEL_STYLE_ICONS));
+                }
             } else if (getContent() == R.xml.launcher_about_preferences) {
                 findPreference("about_version").setSummary(BuildConfig.VERSION_NAME);
                 if (BuildConfig.TRAVIS && !BuildConfig.TAGGED_BUILD) {
                     findPreference("about_changelog").setSummary(Utilities.getChangelog());
                 }
             } else if (getContent() == R.xml.launcher_behavior_preferences) {
-                if (Utilities.ATLEAST_NOUGAT_MR1) {
+                if (Utilities.ATLEAST_NOUGAT_MR1 && BuildConfig.TRAVIS) {
                     getPreferenceScreen().removePreference(findPreference(FeatureFlags.KEY_PREF_ENABLE_BACKPORT_SHORTCUTS));
                 }
             } else if (getContent() == R.xml.launcher_hidden_preferences) {
