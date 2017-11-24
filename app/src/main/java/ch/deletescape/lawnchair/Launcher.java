@@ -53,7 +53,6 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
-import android.os.Process;
 import android.os.StrictMode;
 import android.os.UserHandle;
 import android.support.annotation.NonNull;
@@ -82,11 +81,6 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.microsoft.azure.mobile.MobileCenter;
-import com.microsoft.azure.mobile.analytics.Analytics;
-import com.microsoft.azure.mobile.crashes.Crashes;
-import com.microsoft.azure.mobile.distribute.Distribute;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -100,7 +94,7 @@ import ch.deletescape.lawnchair.accessibility.LauncherAccessibilityDelegate;
 import ch.deletescape.lawnchair.allapps.AllAppsContainerView;
 import ch.deletescape.lawnchair.allapps.AllAppsIconRowView;
 import ch.deletescape.lawnchair.allapps.AllAppsTransitionController;
-import ch.deletescape.lawnchair.allapps.DefaultAppSearchController;
+import ch.deletescape.lawnchair.allapps.UnicodeStrippedAppSearchController;
 import ch.deletescape.lawnchair.blur.BlurWallpaperProvider;
 import ch.deletescape.lawnchair.compat.AppWidgetManagerCompat;
 import ch.deletescape.lawnchair.compat.LauncherAppsCompat;
@@ -290,7 +284,6 @@ public class Launcher extends Activity
     private boolean mAttached;
 
     private boolean kill;
-    private boolean recreate;
     private boolean reloadIcons;
     private boolean updateWallpaper = true;
 
@@ -375,9 +368,6 @@ public class Launcher extends Activity
 
         setScreenOrientation();
 
-        if (!BuildConfig.MOBILE_CENTER_KEY.equalsIgnoreCase("null"))
-            MobileCenter.start(getApplication(), BuildConfig.MOBILE_CENTER_KEY, Analytics.class, Crashes.class, Distribute.class);
-
         LauncherAppState app = LauncherAppState.getInstance();
         app.setMLauncher(this);
 
@@ -440,11 +430,7 @@ public class Launcher extends Activity
         registerReceiver(mUiBroadcastReceiver, filter);
 
         mLauncherTab = new LauncherTab(this);
-
-        if (mSharedPrefs.getRequiresIconCacheReload()) {
-            mSharedPrefs.setRequiresIconCacheReload(false);
-            reloadIcons();
-        }
+        Utilities.showOutdatedLawnfeedPopup(this);
 
         Window window = getWindow();
         WindowManager.LayoutParams attributes = window.getAttributes();
@@ -475,11 +461,7 @@ public class Launcher extends Activity
         if (mPaused)
             kill = true;
         else
-            android.os.Process.killProcess(android.os.Process.myPid());
-    }
-
-    public void scheduleRecreate() {
-        recreate = true;
+            Utilities.restartLauncher(getApplicationContext());
     }
 
     public void scheduleUpdateWallpaper() {
@@ -949,13 +931,7 @@ public class Launcher extends Activity
 
         if (kill) {
             kill = false;
-            Log.v("Settings", "Die Motherf*cker!");
-            Process.killProcess(Process.myPid());
-        }
-
-        if (recreate) {
-            recreate = false;
-            recreate();
+            Utilities.restartLauncher(getApplicationContext());
         }
 
         if (updateWallpaper) {
@@ -969,7 +945,7 @@ public class Launcher extends Activity
     private void reloadIcons() {
         mIconCache.pip.updateIconPack();
         mIconCache.clear();
-        Process.killProcess(Process.myPid());
+        Utilities.restartLauncher(getApplicationContext());
     }
 
     @Override
@@ -1187,7 +1163,7 @@ public class Launcher extends Activity
         // Setup Apps and Widgets
         mAppsView = findViewById(R.id.apps_view);
         mWidgetsView = findViewById(R.id.widgets_view);
-        mAppsView.setSearchBarController(new DefaultAppSearchController());
+        mAppsView.setSearchBarController(new UnicodeStrippedAppSearchController());
 
         // Setup the drag controller (drop targets have to be added in reverse order in priority)
         mDragController.setDragScoller(mWorkspace);

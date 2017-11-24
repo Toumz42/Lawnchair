@@ -31,6 +31,7 @@ interface IPreferenceProvider {
     val showHidden: Boolean
     val allAppsIconScale: Float
     val allAppsIconTextScale: Float
+    val allAppsIconPaddingScale: Float
     val useCustomAllAppsTextColor: Boolean
     val verticalDrawerLayout: Boolean
 
@@ -66,6 +67,8 @@ interface IPreferenceProvider {
     fun hotseatShouldUseExtractedColorsCache(value: Boolean, commit: Boolean = false)
     fun lightStatusBarKeyCache(default: Boolean): Boolean
     fun lightStatusBarKeyCache(value: Boolean, commit: Boolean = false)
+    val hotseatShowArrow: Boolean
+    val hotseatShowPageIndicator: Boolean
     val enableHapticFeedback: Boolean
     val keepScrollState: Boolean
     val useFullWidthSearchBar: Boolean
@@ -91,8 +94,9 @@ interface IPreferenceProvider {
     val showWeather: Boolean
     val lockDesktop: Boolean
     val animatedClockIcon: Boolean
-    val animateClockIconAlternativeClockApps: Boolean
-
+    val animatedClockIconAlternativeClockApps: Boolean
+    val iconLabelsInTwoLines: Boolean
+    val twoRowDock: Boolean
     val pulldownAction: String
 
     // -----------------
@@ -106,9 +110,9 @@ interface IPreferenceProvider {
     fun alternateIcon(key: String): String?
     fun alternateIcon(key: String, alternateIcon: String, commit: Boolean = false)
     fun removeAlternateIcon(key: String)
-    fun appVisibility(context: Context, key: String, visible: Boolean, commit: Boolean = false)
-    fun appVisibility(context: Context, key: String): Boolean
+    var hiddenAppsSet : Set<String>
     var previousBuildNumber : Int
+    var disableLawnfeedPopup: Boolean
     var overrideIconShape: String
     val backportAdaptiveIcons: Boolean
     fun removeOverrideIconShape()
@@ -125,6 +129,8 @@ interface IPreferenceProvider {
     val iconTextScaleSB: Float
     val iconPackPackage: String
     val hotseatIconScale: Float
+    val hotseatHeightScale: Float
+    val enablePhysics: Boolean
 
     // -----------------
     // GENERAL - BITS
@@ -137,7 +143,6 @@ interface IPreferenceProvider {
     // STATES
     // -----------------
 
-    var requiresIconCacheReload: Boolean
     var emptyDatabaseCreated: Boolean
     fun removeEmptyDatabaseCreated()
     fun userCreationTimeKeyExists(key: Long): Boolean

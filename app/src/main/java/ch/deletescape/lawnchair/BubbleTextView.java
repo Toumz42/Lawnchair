@@ -31,6 +31,7 @@ import android.graphics.Rect;
 import android.graphics.Region;
 import android.graphics.drawable.Drawable;
 import android.support.annotation.NonNull;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Property;
 import android.util.SparseArray;
@@ -163,6 +164,12 @@ public class BubbleTextView extends TextView
                 defaultIconSize);
         a.recycle();
 
+        if (Utilities.getPrefs(context).getIconLabelsInTwoLines()) {
+            setMaxLines(2);
+            setEllipsize(TextUtils.TruncateAt.END);
+            setHorizontallyScrolling(false);
+        }
+
         if (mCustomShadowsEnabled) {
             // Draw the background itself as the parent is drawn twice.
             mBackground = getBackground();
@@ -236,9 +243,8 @@ public class BubbleTextView extends TextView
     }
 
     private void applyClockIcon(ComponentName componentName) {
-        if (Utilities.getPrefs(getContext()).getAnimatedClockIcon() &&
-                Utilities.isComponentClock(componentName, !Utilities.getPrefs(getContext()).getAnimateClockIconAlternativeClockApps())) {
-            setIcon(ClockIconDrawable.Companion.create(getContext()));
+        if (Utilities.isAnimatedClock(getContext(), componentName)) {
+            setIcon(ClockIconDrawable.Companion.createWrapped(getContext()));
         }
     }
 
